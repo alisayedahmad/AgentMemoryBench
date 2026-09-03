@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.env
+
+# Ignore the cache directory for raw outputs
+results/raw_outputs/cache/
+
