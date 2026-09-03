@@ -2,7 +2,5 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .env
-
-# Ignore the cache directory for raw outputs
+venv/
 results/raw_outputs/cache/
-
