@@ -1,4 +1,4 @@
-"""extracted facts store: persists Facts, supports lookup, and invalidation without deletion"""
+"""extracted facts store: persists Facts, supports lookup , and invalidation without deletion"""
 import os
 from memory.extraction.schemas import Fact
 class SemanticStore:
