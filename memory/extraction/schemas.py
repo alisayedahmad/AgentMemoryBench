@@ -1,5 +1,5 @@
 import uuid
-from typing import Optional
+from typing import List, Optional
 from pydantic import BaseModel, Field
 class Fact(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -10,3 +10,4 @@ class Fact(BaseModel):
     valid_to: Optional[str] = None
     source_episode_id: str = Field(min_length=1)
     confidence: float = Field(ge=0, le=1)
+    also_seen_in: List[str] = Field(default_factory=list)
