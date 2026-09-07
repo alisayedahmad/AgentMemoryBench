@@ -11,3 +11,4 @@ class Fact(BaseModel):
     source_episode_id: str = Field(min_length=1)
     confidence: float = Field(ge=0, le=1)
     also_seen_in: List[str] = Field(default_factory=list)
+    retrieval_count: int = 0
