@@ -12,3 +12,4 @@ class Fact(BaseModel):
     confidence: float = Field(ge=0, le=1)
     also_seen_in: List[str] = Field(default_factory=list)
     retrieval_count: int = 0
+    consolidated_from: List[str] = Field(default_factory=list)
