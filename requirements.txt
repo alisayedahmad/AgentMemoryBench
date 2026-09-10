@@ -3,3 +3,4 @@ pydantic
 numpy
 networkx
 rank-bm25
+anthropic
