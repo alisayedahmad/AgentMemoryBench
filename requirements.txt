@@ -2,3 +2,4 @@ pytest
 pydantic
 numpy
 networkx
+rank-bm25
