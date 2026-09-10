@@ -59,19 +59,19 @@ def _graph_scores(graph, query):
 
 def hybrid_search(store, query, embed, graph=None, k=5, weights=(0.4, 0.4, 0.2)):
     """
-    Ranks facts against a query by combining three signals:
-      - dense: cosine similarity between embed(query) and embed(fact)
-      - bm25: keyword overlap, min-max normalized per query
-      - graph: 1.0 for facts touching an entity named in the query, via graph traversal
-    weights = (dense, bm25, graph), doesn't need to sum to 1. graph=None just
-    zeroes out that signal instead of erroring, so this still works before
-    a graph exists.
+    Ranks facts against a query by combining three signals: dense (cosine
+    similarity between embed(query) and embed(fact)), bm25 (keyword overlap,
+    min-max normalized per query), and graph (1.0 for facts touching an
+    entity named in the query, 0 otherwise). weights = (dense, bm25, graph)
+    and doesn't need to sum to 1, it's just a relative weighting for the
+    sort. graph=None zeroes out that signal instead of erroring, so this
+    still works before a graph exists.
 
     Returns up to k (fact, score) pairs, highest score first.
 
-    Known limitation: embed() is called once per fact on every search, same
-    as deduplication.py — fine at demo scale, would need a cached embedding
-    index before this runs on a real corpus.
+    embed() gets called once per fact on every search, same as
+    deduplication.py does — fine at this scale, would need a cached
+    embedding index before this runs on a real corpus.
     """
     facts = store.all()
     if not facts:

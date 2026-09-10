@@ -51,14 +51,15 @@ def test_different_meaning_is_kept_as_separate_fact(tmp_path):
         store, make_fact(object="Meta", source_episode_id="ep2"), embed=fake_embed
     )
 
+    # deduplicate leaves adding the non-duplicate to the caller
     assert merged_into is None
-    assert len(store.all()) == 2
+    assert len(store.all()) == 1
 
 
-def test_first_fact_for_a_subject_predicate_is_just_added(tmp_path):
+def test_first_fact_for_a_subject_predicate_is_left_for_the_caller_to_add(tmp_path):
     store = SemanticStore(path=str(tmp_path / "facts.jsonl"))
 
     merged_into = deduplicate(store, make_fact(object="Google"), embed=fake_embed)
 
     assert merged_into is None
-    assert len(store.all()) == 1
+    assert len(store.all()) == 0

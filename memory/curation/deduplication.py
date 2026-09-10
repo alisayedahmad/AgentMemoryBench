@@ -16,8 +16,15 @@ def deduplicate(store, new_fact, embed, threshold=0.85):
     Compares new_fact's object against current, live facts sharing
     subject+predicate. If the closest one is similar enough, new_fact is
     treated as a duplicate: its episode gets recorded on the existing fact
-    instead of adding a second copy. Returns the id merged into, or None
-    if new_fact was added as its own distinct fact.
+    instead of adding a second copy, and this function persists that merge.
+    Returns the id merged into.
+
+    If nothing is similar enough, this function doesn't add new_fact — it
+    returns None and leaves that to the caller. It can't call
+    check_contradiction() and add new_fact itself here, because the
+    pipeline needs contradiction-checking to run first, against the other
+    live facts, before new_fact exists in the store, and it needs to get
+    added exactly once.
     """
     candidates = [
         f for f in store.find(subject=new_fact.subject, predicate=new_fact.predicate)
@@ -38,5 +45,4 @@ def deduplicate(store, new_fact, embed, threshold=0.85):
             store.add(merged)
             return best.id
 
-    store.add(new_fact)
     return None

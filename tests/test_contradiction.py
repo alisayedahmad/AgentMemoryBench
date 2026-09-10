@@ -16,15 +16,18 @@ def test_same_object_is_not_a_contradiction(tmp_path):
 
     invalidated = check_contradiction(store, make_fact(object="Google"))
 
+    # check_contradiction never adds new_fact itself — that's the caller's job
     assert invalidated == []
-    assert len(store.all()) == 2  # both kept, dedup is a separate concern
+    assert len(store.all()) == 1
 
 
 def test_different_object_invalidates_old_fact(tmp_path):
     store = SemanticStore(path=str(tmp_path / "facts.jsonl"))
     store.add(make_fact(object="Google", valid_from="2025-03"))
+    new_fact = make_fact(object="Meta", valid_from="2026-01")
 
-    check_contradiction(store, make_fact(object="Meta", valid_from="2026-01"))
+    check_contradiction(store, new_fact)
+    store.add(new_fact)  # caller's job now, check_contradiction only invalidates
 
     current = store.find(subject="user", predicate="works_at")
     live = [f for f in current if f.valid_to is None]
