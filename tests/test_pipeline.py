@@ -56,3 +56,29 @@ def test_contradicting_fact_invalidates_old_one_and_is_added(tmp_path):
     live = [f for f in store.all() if f.valid_to is None]
     assert live == [fact]
     assert fact.object == "Meta"
+
+
+def fake_embed_similar_predicates(text):
+    """"likes" and "drinks" are close, everything else is generic"""
+    vectors = {
+        "likes": [1.0, 0.0],
+        "drinks": [0.95, 0.05],
+        "coffee": [0.0, 1.0],
+    }
+    return vectors.get(text, [0.5, 0.5])
+
+
+def test_predicate_canonicalization_lets_dedup_catch_a_reworded_predicate(tmp_path):
+    store = SemanticStore(path=str(tmp_path / "facts.jsonl"))
+    graph = EntityGraph()
+    ingest_fact(
+        store, graph, make_fact(predicate="likes", object="coffee"), embed=fake_embed_similar_predicates
+    )
+
+    fact, event = ingest_fact(
+        store, graph, make_fact(predicate="drinks", object="coffee", source_episode_id="ep2"),
+        embed=fake_embed_similar_predicates,
+    )
+
+    assert event == "duplicate"
+    assert len(store.all()) == 1

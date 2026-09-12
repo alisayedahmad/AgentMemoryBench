@@ -1,7 +1,8 @@
-"""manual smoke test, not part of pytest. needs a real ANTHROPIC_API_KEY, costs a few cents, safe to rerun (cached)"""
+"""manual smoke test, not part of pytest. needs a real ANTHROPIC_API_KEY, costs a few cents. first run also downloads a small embedding model (~100MB), then it's cached. wipes its own file each run, don't point this at real data"""
 
-import hashlib
+import os
 
+from infra.embedder import make_embedder
 from infra.llm_client import LLMClient
 from memory.curation.pipeline import ingest_fact
 from memory.extraction.extractor import Extractor
@@ -16,18 +17,16 @@ EPISODES = [
     "Coffee is honestly the best part of my mornings.",
 ]
 
-def toy_embed(text, dim=64):
-    """fake embedding, word hash only. checks nothing crashes, not real quality"""
-    vec = [0.0] * dim
-    for word in text.lower().split():
-        idx = int(hashlib.md5(word.encode()).hexdigest(), 16) % dim
-        vec[idx] += 1.0
-    return vec
+STORE_PATH = "results/raw_outputs/smoke_facts.jsonl"
 
 def main():
+    if os.path.exists(STORE_PATH):
+        os.remove(STORE_PATH)
+
     llm_client = LLMClient()
     extractor = Extractor(llm_client)
-    store = SemanticStore(path="results/raw_outputs/smoke_facts.jsonl")
+    embed = make_embedder()
+    store = SemanticStore(path=STORE_PATH)
     graph = EntityGraph()
 
     for i, text in enumerate(EPISODES):
@@ -38,7 +37,7 @@ def main():
             print("  no facts extracted")
             continue
         for fact in facts:
-            result, event = ingest_fact(store, graph, fact, embed=toy_embed)
+            result, event = ingest_fact(store, graph, fact, embed=embed)
             print(f"  [{event}] {fact.subject} {fact.predicate} {fact.object!r}")
 
     print("\n--- current facts ---")
@@ -47,7 +46,7 @@ def main():
         print(f"  {fact.subject} {fact.predicate} {fact.object!r} [{status}]")
 
     print("\n--- hybrid_search('where does the user work now') ---")
-    for fact, score in hybrid_search(store, "where does the user work now", embed=toy_embed, graph=graph):
+    for fact, score in hybrid_search(store, "where does the user work now", embed=embed, graph=graph):
         print(f"  {score:.3f}  {fact.subject} {fact.predicate} {fact.object!r}")
 
 if __name__ == "__main__":
