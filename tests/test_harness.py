@@ -74,3 +74,15 @@ def test_multiple_questions_each_get_their_own_answer_call():
 
     assert results[0]["passed"] is True
     assert results[1]["passed"] is False
+
+
+def test_run_case_no_memory_uses_no_extraction_and_no_retrieval():
+    from bench.harness import run_case_no_memory
+
+    client = FakeLLMClient(["I don't know"])
+    case = {"episodes": ["irrelevant, not used"], "questions": [{"question": "anything", "expects": "i don't know"}]}
+
+    results = run_case_no_memory(case, client)
+
+    assert client.i == 1  # exactly one call, no extraction calls happened
+    assert results[0]["passed"] is True
