@@ -4,3 +4,4 @@ numpy
 networkx
 rank-bm25
 anthropic
+sentence-transformers
