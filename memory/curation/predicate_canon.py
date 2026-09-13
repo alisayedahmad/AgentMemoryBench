@@ -1,27 +1,31 @@
 """snaps a new fact's predicate to an existing one for the same subject when they mean the same thing"""
 
+import re
+
 from memory.curation.deduplication import cosine_similarity
 
+def _digits_stripped(predicate):
+    return re.sub(r"\d+", "", predicate)
 
 def canonicalize_predicate(store, new_fact, embed, threshold=0.75):
-    """
-    Looks at predicates already used for new_fact.subject. If the closest
-    one is similar enough, rewrites new_fact.predicate to match it exactly
-    — so a later dedup/contradiction check (which needs an exact string
-    match) actually finds it. If nothing is close, new_fact comes back
-    unchanged: it's the first fact of its kind for this subject.
-
-    threshold=0.75 is a guess, not a measured value — I couldn't test this
-    against a real embedding model (no network to huggingface.co here).
-    Tune it against what you actually see.
-    """
+    """rewrites predicate to match an existing similar one for the same subject, else unchanged
+    don't lower threshold — "likes" vs "hates" scores 0.508, above real synonyms like works_at/is employed by"""
     known = {f.predicate for f in store.find(subject=new_fact.subject)}
     if not known:
         return new_fact
 
+    # listed_item_7 vs listed_item_8 embed near-identically, merging them would destroy the position
+    stripped = _digits_stripped(new_fact.predicate)
+    candidates = {
+        p for p in known
+        if not (p != new_fact.predicate and _digits_stripped(p) == stripped)
+    }
+    if not candidates:
+        return new_fact
+
     new_vec = embed(new_fact.predicate)
     best_predicate, best_score = max(
-        ((p, cosine_similarity(new_vec, embed(p))) for p in known),
+        ((p, cosine_similarity(new_vec, embed(p))) for p in candidates),
         key=lambda pair: pair[1],
     )
 

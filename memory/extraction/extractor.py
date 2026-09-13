@@ -15,9 +15,20 @@ Each fact is one claim, decomposed into subject, predicate, object. Be
 exhaustive — extract every fact stated, including small details mentioned
 briefly or in passing, not just the main topic of each turn.
 
-- Use "user" as the subject for any fact about the person you're talking
-  to. Only use a different subject for facts about someone or something
-  else explicitly named.
+- Subject is always "user" or "assistant" or a named third party. Never
+  write "I", "me", "you" or "speaker" — work out who is meant from the
+  role label on the turn and name them.
+- From user turns, extract what the user says about themselves, their
+  life, their preferences and their plans.
+- From assistant turns, extract the concrete things the assistant gave:
+  named places, products, tools, trails, dishes, terms it suggested, and
+  specific numbers or figures it stated. Subject is "assistant", predicate
+  is what it did (recommended, suggested, listed, stated). Skip generic
+  advice and filler — only things the user could later ask to be reminded
+  of.
+- When the assistant gives a numbered or ordered list, keep the position
+  in the predicate, e.g. listed_item_7, so "what was the 7th one" can be
+  answered later.
 - Predicates are matched by exact string later, across episodes, so keep
   them short, lowercase, snake_case (e.g. "works_at", not "is employed by"
   or "Works At"), and reuse the same predicate for the same kind of fact
@@ -36,24 +47,11 @@ Conversation excerpt:
 {episode_text}
 """
 
-
 def _strip_code_fence(text):
     text = text.strip()
     text = re.sub(r"^```(?:json)?\s*", "", text)
     text = re.sub(r"\s*```$", "", text)
     return text.strip()
-
-
-def _flatten(items):
-    """the model sometimes wraps the array twice, [[{...}]] parses fine but the dicts sit one level down"""
-    rows = []
-    for item in items:
-        if isinstance(item, dict):
-            rows.append(item)
-        elif isinstance(item, list):
-            rows.extend(_flatten(item))
-    return rows
-
 
 def _parse_facts(text):
     """salvages every complete {...} object, so a truncated tail or a stray [[ doesn't cost us the whole batch"""
@@ -84,14 +82,27 @@ def _parse_facts(text):
                     pass
     return rows
 
+def _flatten(items):
+    """the model sometimes wraps the array twice, [[{...}]] parses fine but the dicts sit one level down"""
+    rows = []
+    for item in items:
+        if isinstance(item, dict):
+            rows.append(item)
+        elif isinstance(item, list):
+            rows.extend(_flatten(item))
+    return rows
 
-SELF_WORDS = {"i", "me", "my", "myself", "user", "the user", "speaker", "the speaker", "the person"}
-
+SELF_WORDS = {"i", "me", "my", "myself", "the user", "speaker", "the speaker", "the person"}
+ASSISTANT_WORDS = {"assistant", "the assistant", "you", "chatbot", "ai"}
 
 def _normalize_subject(subject):
-    """same person, different words each call (i / speaker / user). map self-words to "user", leave real names alone"""
-    return "user" if subject.strip().lower() in SELF_WORDS else subject
-
+    """same person, different words each call (i / speaker / user). "assistant" is kept separate, its facts answer a whole question category"""
+    lowered = subject.strip().lower()
+    if lowered in ASSISTANT_WORDS:
+        return "assistant"
+    if lowered in SELF_WORDS or lowered == "user":
+        return "user"
+    return subject
 
 DATE_PATTERN = re.compile(r"^\d{4}(-\d{2}(-\d{2})?)?$")
 
@@ -102,7 +113,6 @@ def _clean_date(value):
     if value and DATE_PATTERN.match(value):
         return value
     return None
-
 
 class Extractor:
     def __init__(self, llm_client, model="claude-sonnet-5"):
