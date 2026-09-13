@@ -19,7 +19,8 @@ def load_longmemeval(path):
             "question_id": entry["question_id"],
             "question_type": entry["question_type"],
             "question": entry["question"],
-            "answer": entry["answer"],
+            "answer": str(entry["answer"]),  # gold is sometimes a bare number
+            "question_date": _parse_date(entry["question_date"]),
             "is_abstention": "_abs" in entry["question_id"],
             "episodes": [_session_to_text(s) for s in entry["haystack_sessions"]],
             "episode_dates": [_parse_date(d) for d in entry["haystack_dates"]],

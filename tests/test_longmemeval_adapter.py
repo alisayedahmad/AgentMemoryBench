@@ -40,6 +40,7 @@ def test_basic_shape(tmp_path):
     assert "user: I graduated with a degree in Business Administration." in case["episodes"][0]
     assert "assistant: That's great!" in case["episodes"][0]
     assert case["episode_dates"] == ["2023-05-30"]
+    assert case["question_date"] == "2023-05-30"
 
 
 def test_abstention_detected_from_question_id(tmp_path):
@@ -48,6 +49,7 @@ def test_abstention_detected_from_question_id(tmp_path):
         "question_type": "temporal-reasoning",
         "question": "Which happened first?",
         "answer": "Not enough information.",
+        "question_date": "2023/06/01 (Thu) 12:00",
         "haystack_dates": ["2023/05/30 (Tue) 20:00"],
         "haystack_sessions": [[{"role": "user", "content": "hi"}]],
     }])
@@ -63,6 +65,7 @@ def test_multiple_sessions_become_multiple_episodes(tmp_path):
         "question_type": "multi-session",
         "question": "q",
         "answer": "a",
+        "question_date": "2023/02/02 (Thu) 09:00",
         "haystack_dates": ["2023/05/30 (Tue) 20:00", "2023/06/02 (Fri) 09:15"],
         "haystack_sessions": [
             [{"role": "user", "content": "session one"}],
@@ -94,3 +97,19 @@ def test_against_real_downloaded_file():
         "single-session-user", "single-session-assistant", "single-session-preference",
     }
     assert all(case["episodes"] for case in cases)
+
+
+def test_numeric_gold_answer_becomes_a_string(tmp_path):
+    path = make_fixture(tmp_path, [{
+        "question_id": "gpt4_num",
+        "question_type": "multi-session",
+        "question": "how many times?",
+        "answer": 3,
+        "question_date": "2023/05/30 (Tue) 23:40",
+        "haystack_dates": ["2023/05/30 (Tue) 20:00"],
+        "haystack_sessions": [[{"role": "user", "content": "hi"}]],
+    }])
+
+    cases = load_longmemeval(path)
+
+    assert cases[0]["answer"] == "3"

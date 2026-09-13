@@ -44,3 +44,11 @@ def test_invalidated_facts_are_marked_not_current_in_the_prompt():
     answer_question("Where does the user work?", [old_fact], client)
 
     assert "(? to 2026-09)" in client.last_messages[0]["content"]
+
+
+def test_as_of_goes_in_the_prompt_for_how_long_ago_questions():
+    client = FakeLLMClient("3 weeks ago")
+
+    answer_question("How long ago?", [make_fact()], client, as_of="2023-05-24")
+
+    assert "2023-05-24" in client.last_messages[0]["content"]

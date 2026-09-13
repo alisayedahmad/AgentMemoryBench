@@ -68,7 +68,7 @@ def run_question(case, llm_client, embed, k=10, verbose=False):
                 print(f"    {score:.3f}  {f.subject} {f.predicate} {f.object!r}")
 
         facts = [f for f, _ in retrieved]
-        answer = answer_question(case["question"], facts, llm_client)
+        answer = answer_question(case["question"], facts, llm_client, as_of=case["question_date"])
 
     correct = judge_answer(
         case["question_type"], case["question"], case["answer"], answer,
@@ -98,9 +98,10 @@ def main(n=10, verbose=False, seed=0):
         if not correct:
             print(f"       gold: {case['answer'][:90]!r}")
             print(f"       got:  {answer[:90]!r}")
+        _save(results)  # written every question, a crash halfway still leaves usable results
 
     _report(results)
-    _save(results)
+    print(f"raw outputs written to {RESULTS_PATH}")
 
 def _report(results):
     by_type = defaultdict(list)
@@ -123,7 +124,6 @@ def _save(results):
     os.makedirs(os.path.dirname(RESULTS_PATH), exist_ok=True)
     with open(RESULTS_PATH, "w") as f:
         json.dump(results, f, indent=2)
-    print(f"raw outputs written to {RESULTS_PATH}")
 
 if __name__ == "__main__":
     n = int(sys.argv[1]) if len(sys.argv) > 1 else 10

@@ -119,7 +119,7 @@ class Extractor:
         )
 
         rows = _parse_facts(raw)
-        if not rows:
+        if not rows and raw.strip() not in ("[]", ""):
             print(f"  [no facts parsed for {episode_id}] {len(raw)} chars, ends: {raw[-120:]!r}")
 
         facts = []
