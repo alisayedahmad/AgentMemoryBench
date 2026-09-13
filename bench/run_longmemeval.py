@@ -18,7 +18,7 @@ from memory.storage.semantic import SemanticStore
 DATA_PATH = "data/longmemeval_oracle.json"
 
 
-def run_question(case, llm_client, embed, k=5):
+def run_question(case, llm_client, embed, k=10, verbose=False):
     """fresh store per question, extraction -> pipeline -> hybrid_search -> answer -> judge"""
     extractor = Extractor(llm_client)
     graph = EntityGraph()
@@ -32,7 +32,18 @@ def run_question(case, llm_client, embed, k=5):
             for fact in facts:
                 ingest_fact(store, graph, fact, embed)
 
-        facts = [f for f, _ in hybrid_search(store, case["question"], embed, graph=graph, k=k)]
+        if verbose:
+            print("  stored facts:")
+            for f in store.all():
+                print(f"    {f.subject} {f.predicate} {f.object!r} ({f.valid_from} to {f.valid_to or 'now'})")
+
+        retrieved = hybrid_search(store, case["question"], embed, graph=graph, k=k)
+        if verbose:
+            print("  retrieved for this question:")
+            for f, score in retrieved:
+                print(f"    {score:.3f}  {f.subject} {f.predicate} {f.object!r}")
+
+        facts = [f for f, _ in retrieved]
         answer = answer_question(case["question"], facts, llm_client)
 
     correct = judge_answer(
@@ -42,19 +53,19 @@ def run_question(case, llm_client, embed, k=5):
     return answer, correct
 
 
-def main(n=10):
+def main(n=10, verbose=True):
     cases = load_longmemeval(DATA_PATH)[:n]
     llm_client = LLMClient()
     embed = make_embedder()
 
     correct_count = 0
     for case in cases:
-        answer, correct = run_question(case, llm_client, embed)
+        print(f"\n({case['question_type']}) {case['question']!r}")
+        answer, correct = run_question(case, llm_client, embed, verbose=verbose)
         correct_count += correct
         mark = "PASS" if correct else "FAIL"
-        print(f"[{mark}] ({case['question_type']}) {case['question']!r}")
-        print(f"  gold: {case['answer']!r}")
-        print(f"  got:  {answer!r}")
+        print(f"[{mark}] gold: {case['answer']!r}")
+        print(f"[{mark}] got:  {answer!r}")
 
     print(f"\n{correct_count}/{len(cases)} correct")
 
