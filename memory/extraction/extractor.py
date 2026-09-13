@@ -11,7 +11,9 @@ EXTRACTION_PROMPT = """Extract atomic facts from this conversation excerpt.
 Today's date is {as_of}. Use it to work out real dates from relative time
 words like "last march" or "recently".
 
-Each fact is one claim, decomposed into subject, predicate, object.
+Each fact is one claim, decomposed into subject, predicate, object. Be
+exhaustive — extract every fact stated, including small details mentioned
+briefly or in passing, not just the main topic of each turn.
 
 - Use "user" as the subject for any fact about the person you're talking
   to. Only use a different subject for facts about someone or something
@@ -76,6 +78,7 @@ class Extractor:
         try:
             rows = json.loads(_strip_code_fence(raw))
         except json.JSONDecodeError:
+            print(f"  [extraction JSON parse failed for {episode_id}] raw reply: {raw[:200]!r}")
             return []
 
         facts = []

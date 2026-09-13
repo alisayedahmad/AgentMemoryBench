@@ -28,9 +28,10 @@ def run_question(case, llm_client, embed, k=10, verbose=False):
 
         for i, episode_text in enumerate(case["episodes"]):
             episode_id = f"{case['question_id']}_ep{i}"
-            facts = extractor.extract(episode_text, episode_id, as_of=case["episode_dates"][i])
+            as_of = case["episode_dates"][i]
+            facts = extractor.extract(episode_text, episode_id, as_of=as_of)
             for fact in facts:
-                ingest_fact(store, graph, fact, embed)
+                ingest_fact(store, graph, fact, embed, as_of=as_of)
 
         if verbose:
             print("  stored facts:")

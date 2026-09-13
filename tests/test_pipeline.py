@@ -82,3 +82,18 @@ def test_predicate_canonicalization_lets_dedup_catch_a_reworded_predicate(tmp_pa
 
     assert event == "duplicate"
     assert len(store.all()) == 1
+
+
+def test_as_of_passes_through_to_contradiction_as_the_fallback_cutoff(tmp_path):
+    store = SemanticStore(path=str(tmp_path / "facts.jsonl"))
+    graph = EntityGraph()
+    ingest_fact(store, graph, make_fact(object="Google"), embed=fake_embed)
+
+    fact, event = ingest_fact(
+        store, graph, make_fact(object="Meta", source_episode_id="ep2"),  # no valid_from
+        embed=fake_embed, as_of="2023-04-10",
+    )
+
+    assert event == "contradiction"
+    live = [f for f in store.all() if f.id != fact.id][0]
+    assert live.valid_to == "2023-04-10"  # not today's real date

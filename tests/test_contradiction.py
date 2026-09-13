@@ -75,3 +75,27 @@ def test_already_invalidated_fact_is_skipped_next_time(tmp_path):
     invalidated_again = check_contradiction(store, make_fact(object="Freelance", valid_from="2026-06"))
 
     assert google.id not in invalidated_again
+
+
+def test_as_of_is_the_cutoff_when_new_fact_has_no_date(tmp_path):
+    store = SemanticStore(path=str(tmp_path / "facts.jsonl"))
+    old = make_fact(object="Google")
+    store.add(old)
+    new_fact = make_fact(object="Meta")  # no valid_from
+
+    check_contradiction(store, new_fact, as_of="2023-04-10")
+
+    history = store.history(old.id)
+    assert history[-1].valid_to == "2023-04-10"
+
+
+def test_new_facts_own_date_wins_over_as_of(tmp_path):
+    store = SemanticStore(path=str(tmp_path / "facts.jsonl"))
+    old = make_fact(object="Google")
+    store.add(old)
+    new_fact = make_fact(object="Meta", valid_from="2023-05-01")
+
+    check_contradiction(store, new_fact, as_of="2023-04-10")
+
+    history = store.history(old.id)
+    assert history[-1].valid_to == "2023-05-01"
