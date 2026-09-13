@@ -119,3 +119,27 @@ def test_works_as_drop_in_replacement_for_consolidation(tmp_path):
 
     assert result.object == "works in tech, likes coffee, lives in Paris"
     assert fake.call_count == 1
+
+
+def test_use_cache_false_always_calls_the_api(tmp_path):
+    cache = LLMCache(cache_dir=str(tmp_path / "cache"))
+    fake = FakeAnthropicClient(reply="Paris")
+    client = LLMClient(client=fake, cache=cache)
+    messages = [{"role": "user", "content": "capital of France?"}]
+
+    client.call(model="claude-sonnet-5", messages=messages)
+    client.call(model="claude-sonnet-5", messages=messages, use_cache=False)
+
+    assert fake.call_count == 2
+
+
+def test_use_cache_false_still_writes_the_fresh_answer(tmp_path):
+    cache = LLMCache(cache_dir=str(tmp_path / "cache"))
+    fake = FakeAnthropicClient(reply="Paris")
+    client = LLMClient(client=fake, cache=cache)
+    messages = [{"role": "user", "content": "capital of France?"}]
+
+    client.call(model="claude-sonnet-5", messages=messages, use_cache=False)
+    client.call(model="claude-sonnet-5", messages=messages)
+
+    assert fake.call_count == 1

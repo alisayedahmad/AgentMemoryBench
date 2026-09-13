@@ -12,12 +12,13 @@ class LLMClient:
         self.client = client or anthropic.Anthropic()
         self.cache = cache or LLMCache()
 
-    def call(self, model, messages, max_tokens=DEFAULT_MAX_TOKENS, **kwargs):
+    def call(self, model, messages, max_tokens=DEFAULT_MAX_TOKENS, use_cache=True, **kwargs):
         params = {"max_tokens": max_tokens, **kwargs}
 
-        cached = self.cache.get(model, messages, params)
-        if cached is not None:
-            return cached
+        if use_cache:
+            cached = self.cache.get(model, messages, params)
+            if cached is not None:
+                return cached
 
         response = self.client.messages.create(model=model, messages=messages, **params)
         text = _extract_text(response)
