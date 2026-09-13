@@ -43,4 +43,4 @@ def test_invalidated_facts_are_marked_not_current_in_the_prompt():
 
     answer_question("Where does the user work?", [old_fact], client)
 
-    assert "no longer current as of 2026-09" in client.last_messages[0]["content"]
+    assert "(? to 2026-09)" in client.last_messages[0]["content"]

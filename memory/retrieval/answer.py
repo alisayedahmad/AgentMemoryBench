@@ -12,8 +12,7 @@ Answer in one short sentence.
 
 
 def _format_fact(fact):
-    status = "current" if fact.valid_to is None else f"no longer current as of {fact.valid_to}"
-    return f"- {fact.subject} {fact.predicate} {fact.object} ({status})"
+    return f"- {fact.subject} {fact.predicate} {fact.object} ({fact.valid_from or '?'} to {fact.valid_to or 'now'})"
 
 
 def answer_question(question, facts, llm_client, model="claude-sonnet-5"):
