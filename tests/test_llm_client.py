@@ -62,8 +62,8 @@ def test_different_params_bypass_cache(tmp_path):
     client = LLMClient(client=fake, cache=cache)
     messages = [{"role": "user", "content": "capital of France?"}]
 
-    client.call(model="claude-sonnet-5", messages=messages, temperature=0.0)
-    client.call(model="claude-sonnet-5", messages=messages, temperature=0.7)
+    client.call(model="claude-sonnet-5", messages=messages, stop_sequences=["a"])
+    client.call(model="claude-sonnet-5", messages=messages, stop_sequences=["b"])
 
     assert fake.call_count == 2
 

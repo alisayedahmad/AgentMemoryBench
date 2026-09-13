@@ -64,10 +64,10 @@ def _judge_prompt(question_type, question, answer, response, is_abstention):
 def judge_answer(question_type, question, answer, response, llm_client, is_abstention=False,
                  model="claude-sonnet-5", use_cache=True):
     """same judge as their evaluate_qa.py, same prompts, just calling Claude instead of OpenAI
-    temperature=0 because a judge that changes its mind between runs makes every comparison meaningless"""
+    no temperature knob — the anthropic sdk dropped it, so judge noise gets measured instead of suppressed"""
     prompt = _judge_prompt(question_type, question, answer, response, is_abstention)
     reply = llm_client.call(
         model=model, messages=[{"role": "user", "content": prompt}],
-        max_tokens=10, temperature=0, use_cache=use_cache,
+        max_tokens=10, use_cache=use_cache,
     )
     return "yes" in reply.lower()
