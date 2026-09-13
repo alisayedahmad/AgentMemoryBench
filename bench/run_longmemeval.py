@@ -19,7 +19,8 @@ from memory.storage.entity_graph import EntityGraph
 from memory.storage.semantic import SemanticStore
 
 DATA_PATH = "data/longmemeval_oracle.json"
-RESULTS_PATH = "results/raw_outputs/longmemeval_run.json"
+RESULTS_PATH = "results/raw_outputs/longmemeval_{}.json"
+
 
 def stratified_sample(cases, n, seed=0):
     """even split across question types, so a small n isn't all one category"""
@@ -41,8 +42,10 @@ def stratified_sample(cases, n, seed=0):
         i += 1
     return picked
 
+
 def run_question(case, llm_client, embed, k=10, verbose=False):
-    """fresh store per question, extraction -> pipeline -> hybrid_search -> answer -> judge"""
+    """fresh store per question, extraction -> pipeline -> retrieval -> answer -> judge
+    k=None skips retrieval and hands over every stored fact, to separate retrieval misses from extraction misses"""
     extractor = Extractor(llm_client)
     graph = EntityGraph()
 
@@ -61,29 +64,35 @@ def run_question(case, llm_client, embed, k=10, verbose=False):
             for f in store.all():
                 print(f"    {f.subject} {f.predicate} {f.object!r} ({f.valid_from} to {f.valid_to or 'now'})")
 
-        retrieved = hybrid_search(store, case["question"], embed, graph=graph, k=k)
-        if verbose:
-            print("  retrieved for this question:")
-            for f, score in retrieved:
-                print(f"    {score:.3f}  {f.subject} {f.predicate} {f.object!r}")
+        if k is None:
+            facts = store.all()
+        else:
+            retrieved = hybrid_search(store, case["question"], embed, graph=graph, k=k)
+            if verbose:
+                print("  retrieved for this question:")
+                for f, score in retrieved:
+                    print(f"    {score:.3f}  {f.subject} {f.predicate} {f.object!r}")
+            facts = [f for f, _ in retrieved]
 
-        facts = [f for f, _ in retrieved]
+        n_stored = len(store.all())
         answer = answer_question(case["question"], facts, llm_client, as_of=case["question_date"])
 
     correct = judge_answer(
         case["question_type"], case["question"], case["answer"], answer,
         llm_client, is_abstention=case["is_abstention"],
     )
-    return answer, correct
+    return answer, correct, {"n_stored": n_stored, "n_given": len(facts)}
 
-def main(n=10, verbose=False, seed=0):
+
+def main(n=10, verbose=False, seed=0, k=10):
     cases = stratified_sample(load_longmemeval(DATA_PATH), n, seed=seed)
     llm_client = LLMClient()
     embed = make_embedder()
+    results_path = RESULTS_PATH.format("all_facts" if k is None else f"k{k}")
 
     results = []
     for i, case in enumerate(cases, 1):
-        answer, correct = run_question(case, llm_client, embed, verbose=verbose)
+        answer, correct, counts = run_question(case, llm_client, embed, k=k, verbose=verbose)
         results.append({
             "question_id": case["question_id"],
             "question_type": case["question_type"],
@@ -92,16 +101,18 @@ def main(n=10, verbose=False, seed=0):
             "gold": case["answer"],
             "answer": answer,
             "correct": correct,
+            **counts,
         })
         mark = "PASS" if correct else "FAIL"
         print(f"[{mark}] {i}/{len(cases)} ({case['question_type']}) {case['question'][:70]!r}")
         if not correct:
             print(f"       gold: {case['answer'][:90]!r}")
             print(f"       got:  {answer[:90]!r}")
-        _save(results)  # written every question, a crash halfway still leaves usable results
+        _save(results, results_path)
 
     _report(results)
-    print(f"raw outputs written to {RESULTS_PATH}")
+    print(f"raw outputs written to {results_path}")
+
 
 def _report(results):
     by_type = defaultdict(list)
@@ -118,13 +129,20 @@ def _report(results):
         print(f"  {'(of which abstention)':28} {sum(abstention)}/{len(abstention)}")
 
     total = [r["correct"] for r in results]
-    print(f"\n{sum(total)}/{len(total)} correct")
+    given = sum(r["n_given"] for r in results)
+    stored = sum(r["n_stored"] for r in results)
+    print(f"\nfacts given to the answerer: {given}/{stored} stored")
+    print(f"{sum(total)}/{len(total)} correct")
 
-def _save(results):
-    os.makedirs(os.path.dirname(RESULTS_PATH), exist_ok=True)
-    with open(RESULTS_PATH, "w") as f:
+
+def _save(results, path):
+    """written every question, a crash halfway still leaves usable results"""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
         json.dump(results, f, indent=2)
 
+
 if __name__ == "__main__":
-    n = int(sys.argv[1]) if len(sys.argv) > 1 else 10
-    main(n, verbose="-v" in sys.argv)
+    args = [a for a in sys.argv[1:] if not a.startswith("-")]
+    n = int(args[0]) if args else 10
+    main(n, verbose="-v" in sys.argv, k=None if "--all-facts" in sys.argv else 10)
