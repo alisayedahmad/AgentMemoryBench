@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+import threading
 
 
 class LLMCache:
@@ -28,11 +29,23 @@ class LLMCache:
             return json.load(f)["response"]
 
     def set(self, model, messages, params, response):
+        """writes to a temp file then renames, so a concurrent reader never sees a half-written entry"""
         key = self._key(model, messages, params)
-        with open(self._path(key), "w") as f:
+        path = self._path(key)
+        tmp = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
+        with open(tmp, "w") as f:
             json.dump(
                 {"model": model, "messages": messages, "params": params, "response": response},
                 f,
                 indent=2,
             )
+        try:
+            os.replace(tmp, path)
+        except (OSError, PermissionError):
+            # on Windows, if the file is locked by a reader, replace may fail
+            # remove the temp and let the other writer win (both have the same content)
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
         return key

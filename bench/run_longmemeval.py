@@ -5,7 +5,9 @@ import os
 import random
 import sys
 import tempfile
+import threading
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from infra.embedder import make_embedder
 from infra.llm_client import LLMClient
@@ -84,16 +86,19 @@ def run_question(case, llm_client, embed, k=10, verbose=False):
     return answer, correct, {"n_stored": n_stored, "n_given": len(facts)}
 
 
-def main(n=10, verbose=False, seed=0, k=10):
+def main(n=10, verbose=False, seed=0, k=10, workers=8):
     cases = stratified_sample(load_longmemeval(DATA_PATH), n, seed=seed)
     llm_client = LLMClient()
     embed = make_embedder()
     results_path = RESULTS_PATH.format("all_facts" if k is None else f"k{k}")
 
-    results = []
-    for i, case in enumerate(cases, 1):
+    results = [None] * len(cases)
+    done = 0
+    lock = threading.Lock()
+
+    def work(i, case):
         answer, correct, counts = run_question(case, llm_client, embed, k=k, verbose=verbose)
-        results.append({
+        return i, {
             "question_id": case["question_id"],
             "question_type": case["question_type"],
             "is_abstention": case["is_abstention"],
@@ -102,14 +107,28 @@ def main(n=10, verbose=False, seed=0, k=10):
             "answer": answer,
             "correct": correct,
             **counts,
-        })
-        mark = "PASS" if correct else "FAIL"
-        print(f"[{mark}] {i}/{len(cases)} ({case['question_type']}) {case['question'][:70]!r}")
-        if not correct:
-            print(f"       gold: {case['answer'][:90]!r}")
-            print(f"       got:  {answer[:90]!r}")
-        _save(results, results_path)
+        }
 
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = [pool.submit(work, i, case) for i, case in enumerate(cases)]
+        for future in as_completed(futures):
+            try:
+                i, row = future.result()
+            except Exception as exc:  # one bad question shouldn't kill a 500-question run
+                print(f"[ERROR] {exc!r}")
+                continue
+
+            results[i] = row
+            with lock:
+                done += 1
+                mark = "PASS" if row["correct"] else "FAIL"
+                print(f"[{mark}] {done}/{len(cases)} ({row['question_type']}) {row['question'][:70]!r}")
+                if not row["correct"]:
+                    print(f"       gold: {row['gold'][:90]!r}")
+                    print(f"       got:  {row['answer'][:90]!r}")
+                _save([r for r in results if r], results_path)
+
+    results = [r for r in results if r]
     _report(results)
     print(f"raw outputs written to {results_path}")
 
@@ -145,4 +164,5 @@ def _save(results, path):
 if __name__ == "__main__":
     args = [a for a in sys.argv[1:] if not a.startswith("-")]
     n = int(args[0]) if args else 10
-    main(n, verbose="-v" in sys.argv, k=None if "--all-facts" in sys.argv else 10)
+    workers = int(args[1]) if len(args) > 1 else 8
+    main(n, verbose="-v" in sys.argv, k=None if "--all-facts" in sys.argv else 10, workers=workers)
