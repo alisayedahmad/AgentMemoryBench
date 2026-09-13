@@ -1,8 +1,11 @@
 """runs N LongMemEval oracle questions through the pipeline, judged by the real evaluator"""
 
+import json
 import os
+import random
 import sys
 import tempfile
+from collections import defaultdict
 
 from infra.embedder import make_embedder
 from infra.llm_client import LLMClient
@@ -16,7 +19,27 @@ from memory.storage.entity_graph import EntityGraph
 from memory.storage.semantic import SemanticStore
 
 DATA_PATH = "data/longmemeval_oracle.json"
+RESULTS_PATH = "results/raw_outputs/longmemeval_run.json"
 
+def stratified_sample(cases, n, seed=0):
+    """even split across question types, so a small n isn't all one category"""
+    by_type = defaultdict(list)
+    for case in cases:
+        by_type[case["question_type"]].append(case)
+
+    rng = random.Random(seed)
+    for group in by_type.values():
+        rng.shuffle(group)
+
+    picked = []
+    types = sorted(by_type)
+    i = 0
+    while len(picked) < n and any(by_type[t] for t in types):
+        group = by_type[types[i % len(types)]]
+        if group:
+            picked.append(group.pop())
+        i += 1
+    return picked
 
 def run_question(case, llm_client, embed, k=10, verbose=False):
     """fresh store per question, extraction -> pipeline -> hybrid_search -> answer -> judge"""
@@ -53,24 +76,55 @@ def run_question(case, llm_client, embed, k=10, verbose=False):
     )
     return answer, correct
 
-
-def main(n=10, verbose=True):
-    cases = load_longmemeval(DATA_PATH)[:n]
+def main(n=10, verbose=False, seed=0):
+    cases = stratified_sample(load_longmemeval(DATA_PATH), n, seed=seed)
     llm_client = LLMClient()
     embed = make_embedder()
 
-    correct_count = 0
-    for case in cases:
-        print(f"\n({case['question_type']}) {case['question']!r}")
+    results = []
+    for i, case in enumerate(cases, 1):
         answer, correct = run_question(case, llm_client, embed, verbose=verbose)
-        correct_count += correct
+        results.append({
+            "question_id": case["question_id"],
+            "question_type": case["question_type"],
+            "is_abstention": case["is_abstention"],
+            "question": case["question"],
+            "gold": case["answer"],
+            "answer": answer,
+            "correct": correct,
+        })
         mark = "PASS" if correct else "FAIL"
-        print(f"[{mark}] gold: {case['answer']!r}")
-        print(f"[{mark}] got:  {answer!r}")
+        print(f"[{mark}] {i}/{len(cases)} ({case['question_type']}) {case['question'][:70]!r}")
+        if not correct:
+            print(f"       gold: {case['answer'][:90]!r}")
+            print(f"       got:  {answer[:90]!r}")
 
-    print(f"\n{correct_count}/{len(cases)} correct")
+    _report(results)
+    _save(results)
 
+def _report(results):
+    by_type = defaultdict(list)
+    for r in results:
+        by_type[r["question_type"]].append(r["correct"])
+
+    print("\nby question type:")
+    for qtype in sorted(by_type):
+        hits = by_type[qtype]
+        print(f"  {qtype:28} {sum(hits)}/{len(hits)}")
+
+    abstention = [r["correct"] for r in results if r["is_abstention"]]
+    if abstention:
+        print(f"  {'(of which abstention)':28} {sum(abstention)}/{len(abstention)}")
+
+    total = [r["correct"] for r in results]
+    print(f"\n{sum(total)}/{len(total)} correct")
+
+def _save(results):
+    os.makedirs(os.path.dirname(RESULTS_PATH), exist_ok=True)
+    with open(RESULTS_PATH, "w") as f:
+        json.dump(results, f, indent=2)
+    print(f"raw outputs written to {RESULTS_PATH}")
 
 if __name__ == "__main__":
     n = int(sys.argv[1]) if len(sys.argv) > 1 else 10
-    main(n)
+    main(n, verbose="-v" in sys.argv)
