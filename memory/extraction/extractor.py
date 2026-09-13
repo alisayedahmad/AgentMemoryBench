@@ -44,6 +44,34 @@ def _strip_code_fence(text):
     return text.strip()
 
 
+def _parse_facts(text):
+    """salvages every complete {...} object, so a truncated tail or a stray [[ doesn't cost us the whole batch"""
+    text = _strip_code_fence(text)
+    try:
+        parsed = json.loads(text)
+        if isinstance(parsed, list):
+            return [row for row in parsed if isinstance(row, dict)]
+    except json.JSONDecodeError:
+        pass
+
+    rows = []
+    depth = 0
+    start = None
+    for i, char in enumerate(text):
+        if char == "{":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif char == "}" and depth > 0:
+            depth -= 1
+            if depth == 0:
+                try:
+                    rows.append(json.loads(text[start:i + 1]))
+                except json.JSONDecodeError:
+                    pass
+    return rows
+
+
 SELF_WORDS = {"i", "me", "my", "myself", "user", "the user", "speaker", "the speaker", "the person"}
 
 
@@ -54,6 +82,7 @@ def _normalize_subject(subject):
 
 DATE_PATTERN = re.compile(r"^\d{4}(-\d{2}(-\d{2})?)?$")
 
+EXTRACTION_MAX_TOKENS = 4096
 
 def _clean_date(value):
     """only YYYY, YYYY-MM, YYYY-MM-DD count as a date. a word like "recent" becomes null, not garbage in the store"""
@@ -73,13 +102,12 @@ class Extractor:
         raw = self.llm_client.call(
             model=self.model,
             messages=[{"role": "user", "content": prompt}],
+            max_tokens=EXTRACTION_MAX_TOKENS,
         )
 
-        try:
-            rows = json.loads(_strip_code_fence(raw))
-        except json.JSONDecodeError:
-            print(f"  [extraction JSON parse failed for {episode_id}] raw reply: {raw[:200]!r}")
-            return []
+        rows = _parse_facts(raw)
+        if not rows:
+            print(f"  [no facts parsed for {episode_id}] {len(raw)} chars, ends: {raw[-120:]!r}")
 
         facts = []
         for row in rows:

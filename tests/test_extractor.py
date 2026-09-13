@@ -6,9 +6,11 @@ class FakeLLMClient:
     def __init__(self, reply):
         self.reply = reply
         self.last_messages = None
+        self.last_kwargs = None
 
     def call(self, model, messages, **kwargs):
         self.last_messages = messages
+        self.last_kwargs = kwargs
         return self.reply
 
 def test_extracts_valid_facts():
@@ -132,3 +134,43 @@ def test_year_and_full_date_are_both_kept():
 
     assert facts[0].valid_from == "2025"
     assert facts[1].valid_from == "2025-06-15"
+
+
+def test_doubled_opening_bracket_still_yields_facts():
+    reply = '[[{"subject": "user", "predicate": "works_with", "object": "Rachel", "confidence": 0.9}]'
+    extractor = Extractor(FakeLLMClient(reply))
+
+    facts = extractor.extract("some text", "episode_12")
+
+    assert len(facts) == 1
+    assert facts[0].object == "Rachel"
+
+
+def test_truncated_tail_keeps_the_complete_facts():
+    reply = (
+        '[\\n  {"subject": "user", "predicate": "owns", "object": "hybrid bike", "confidence": 0.9},\\n'
+        '  {"subject": "user", "predicate": "owns", "object": "Toyota Coro'
+    )
+    extractor = Extractor(FakeLLMClient(reply))
+
+    facts = extractor.extract("some text", "episode_13")
+
+    assert len(facts) == 1
+    assert facts[0].object == "hybrid bike"
+
+
+def test_unrecoverable_reply_returns_empty():
+    extractor = Extractor(FakeLLMClient('[\\n  {"subject": "user", "predicate": "'))
+
+    facts = extractor.extract("some text", "episode_14")
+
+    assert facts == []
+
+
+def test_extraction_asks_for_enough_tokens():
+    client = FakeLLMClient(json.dumps([]))
+    extractor = Extractor(client)
+
+    extractor.extract("some text", "episode_15")
+
+    assert client.last_kwargs["max_tokens"] == 4096
