@@ -99,3 +99,17 @@ def test_new_facts_own_date_wins_over_as_of(tmp_path):
 
     history = store.history(old.id)
     assert history[-1].valid_to == "2023-05-01"
+
+
+def test_older_fact_does_not_invalidate_a_newer_one(tmp_path):
+    # two events, the second one mentioned is the earlier one — not a contradiction,
+    # and invalidating would set valid_to before valid_from
+    store = SemanticStore(path=str(tmp_path / "facts.jsonl"))
+    workshop = make_fact(predicate="attended", object="workshop", valid_from="2023-05-27")
+    store.add(workshop)
+
+    webinar = make_fact(predicate="attended", object="webinar", valid_from="2023-03")
+    invalidated = check_contradiction(store, webinar)
+
+    assert invalidated == []
+    assert store.history(workshop.id)[-1].valid_to is None

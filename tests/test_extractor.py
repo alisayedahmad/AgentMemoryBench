@@ -174,3 +174,21 @@ def test_extraction_asks_for_enough_tokens():
     extractor.extract("some text", "episode_15")
 
     assert client.last_kwargs["max_tokens"] == 4096
+
+
+def test_double_wrapped_array_is_flattened():
+    reply = json.dumps([[
+        {"subject": "user", "predicate": "attended", "object": "mass", "confidence": 0.9},
+        {"subject": "user", "predicate": "wants", "object": "tips", "confidence": 0.8},
+    ]])
+    extractor = Extractor(FakeLLMClient(reply))
+
+    facts = extractor.extract("some text", "episode_16")
+
+    assert [f.object for f in facts] == ["mass", "tips"]
+
+
+def test_empty_array_stays_empty():
+    extractor = Extractor(FakeLLMClient("[]"))
+
+    assert extractor.extract("some text", "episode_17") == []

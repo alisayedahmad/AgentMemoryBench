@@ -44,13 +44,26 @@ def _strip_code_fence(text):
     return text.strip()
 
 
+def _flatten(items):
+    """the model sometimes wraps the array twice, [[{...}]] parses fine but the dicts sit one level down"""
+    rows = []
+    for item in items:
+        if isinstance(item, dict):
+            rows.append(item)
+        elif isinstance(item, list):
+            rows.extend(_flatten(item))
+    return rows
+
+
 def _parse_facts(text):
     """salvages every complete {...} object, so a truncated tail or a stray [[ doesn't cost us the whole batch"""
     text = _strip_code_fence(text)
     try:
         parsed = json.loads(text)
         if isinstance(parsed, list):
-            return [row for row in parsed if isinstance(row, dict)]
+            rows = _flatten(parsed)
+            if rows:
+                return rows
     except json.JSONDecodeError:
         pass
 
