@@ -4,3 +4,5 @@ __pycache__/
 .env
 venv/
 results/raw_outputs/cache/
+data/
+data
